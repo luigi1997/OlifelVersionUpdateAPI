@@ -1,34 +1,44 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+﻿using Dapper;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using OlifelVersionUpdateAPI.Helpers;
 using OlifelVersionUpdateAPI.Models;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Xml;
 
 namespace OlifelVersionUpdateAPI.Controllers
 {
-    [Produces("application/json")]
     [Route("api/[controller]")]
     [ApiController]
     public class ClientesController : ControllerBase
     {
         private readonly ProjectContext _context;
+        private DapperConnections _dapperConnections;
 
-        public ClientesController(ProjectContext context)
+        public ClientesController(ProjectContext context, IOptions<ConnectionsStrings> connectionConfig)
         {
             _context = context;
+            _dapperConnections = new DapperConnections(connectionConfig);
         }
 
         /// <summary>
         /// Devolve todos os Clientes
         /// </summary>
         /// <returns></returns>
-        [HttpGet]
-        [Route("GetClientes")]
+        [HttpGet, Route("GetClientes")]
         public async Task<ActionResult<IEnumerable<Cliente>>> GetClientes()
         {
-            return await _context.Clientes.ToListAsync();
+            using (IDbConnection connection = _dapperConnections.getLicencasConnection())
+            {
+                List<Cliente> result = connection.Query<Cliente>("SELECT * FROM Terceiros").ToList();
+
+                return result;
+            }
         }
 
         /// <summary>
@@ -36,18 +46,20 @@ namespace OlifelVersionUpdateAPI.Controllers
         /// </summary>
         /// <param name="id"></param>
         /// <returns></returns>
-        [HttpGet]
-        [Route("GetCliente")]
+        [HttpGet, Route("GetCliente")]
         public async Task<ActionResult<Cliente>> GetCliente(string id)
         {
-            var cliente = await _context.Clientes.FindAsync(id);
-
-            if (cliente == null)
+            if (!ClienteExists(id))
             {
                 return NotFound();
             }
 
-            return cliente;
+            using (IDbConnection connection = _dapperConnections.getLicencasConnection())
+            {
+                Cliente result = connection.Query<Cliente>("SELECT * FROM Terceiros WHERE Id = @ID", new { ID = id }).FirstOrDefault();
+
+                return result;
+            }
         }
 
         /// <summary>
@@ -55,162 +67,32 @@ namespace OlifelVersionUpdateAPI.Controllers
         /// </summary>
         /// <param name="id"></param>
         /// <param name="cliente"></param>
-        /// <param name="hora"></param>
         /// <returns></returns>
-        [HttpPut]
-        [Route("PutCliente")]
-        public async Task<IActionResult> PutCliente(string id, Cliente cliente, string hora)
+        [HttpPut, Route("PutCliente")]
+        public async Task<IActionResult> PutCliente(string id, Cliente cliente)
         {
-            if (hora == "" || hora == null)
+            if (id.ToLower() != cliente.Id.ToString().ToLower())
             {
-                cliente.Data_ultima_alteracao = DateTime.Now;
+                return BadRequest();
+            }
 
-                if (id != cliente.Id)
-                {
-                    return BadRequest();
-                }
+            if (!ClienteExists(id))
+            {
+                return NotFound();
+            }
 
-                List<Grupo> grupos = _context.Grupos.Where(g => g.Id == cliente.Grupo).ToList();
-
-                if (grupos.Count == 0)
-                {
-                    return NotFound(); //grupo nao existe
-                }
-
-                List<Versao> versoes = _context.Versoes.Where(v => v.Id == cliente.Versao_atual).ToList();
-
-                if (versoes.Count == 0)
-                {
-                    return NotFound(); //versao nao existe
-                }
-
-                _context.Entry(cliente).State = EntityState.Modified;
-
+            using (IDbConnection connection = _dapperConnections.getLicencasConnection())
+            {
                 try
                 {
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!ClienteExists(id))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-
-                DateTime dateTime = DateTime.Now;
-                DateTime horaData = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, Int32.Parse(grupos[0].Hora_distribuicao.Split(":")[0]), Int32.Parse(grupos[0].Hora_distribuicao.Split(":")[1]), 0);
-
-                //hora de distribuicao
-                if (grupos.Count > 0)
-                {
-
-                    if (dateTime.Hour < Int32.Parse(grupos[0].Hora_distribuicao.Split(":")[0]) || (dateTime.Hour == Int32.Parse(grupos[0].Hora_distribuicao.Split(":")[0]) && dateTime.Minute < Int32.Parse(grupos[0].Hora_distribuicao.Split(":")[1])))
-                    {
-                        horaData = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, Int32.Parse(grupos[0].Hora_distribuicao.Split(":")[0]), Int32.Parse(grupos[0].Hora_distribuicao.Split(":")[1]), 0);
-                    }
-                    else
-                    {
-                        horaData = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day + 1, Int32.Parse(grupos[0].Hora_distribuicao.Split(":")[0]), Int32.Parse(grupos[0].Hora_distribuicao.Split(":")[1]), 0);
-                    }
-                }
-
-
-                List<VersaoCliente> versoesClientes = _context.VersoesClientes.Where(vc => vc.Cliente_ID == id && vc.Versao_ID == cliente.Versao_atual).ToList();
-                if(versoesClientes.Count > 0)
-                {
-                    return Ok("Versao_ja_foi_distribuida_para_este_cliente");
-                }
-
-                try
-                {
-                    //adiciona versao e cliente à tabela VersaoCliente onde é guarda todas as versoes que cada cliente tem acesso
-                    VersaoCliente versaoCliente = new VersaoCliente { Cliente_ID = cliente.Id, Versao_ID = cliente.Versao_atual, Data_distribuicao = horaData };
-                    _context.VersoesClientes.Add(versaoCliente);
-                    await _context.SaveChangesAsync();
+                    connection.Query("UPDATE Terceiros SET Classe = @Classe, Terceiro = @Terceiro, Nome = @Nome, Morada = @Morada, Localidade = @Localidade, CPostal = @CPostal, email = @Email, Telefone = @Telefone, Fax = @Fax, NIF = @NIF, obs = @Obs, Grupo = @Grupo, Versao_atual = @Versao_atual, Contrato_assistencia = @Contrato_assistencia WHERE Id = @id", new { cliente.Classe, cliente.Terceiro, cliente.Nome, cliente.Morada, cliente.Localidade, cliente.CPostal, cliente.Email, cliente.Telefone, cliente.Fax, cliente.NIF, cliente.Obs, cliente.Grupo, cliente.Versao_atual, cliente.Contrato_assistencia, id });
                 }
                 catch (Exception)
                 {
+                    return Conflict("Conflito de valores. Update do cliente falhou.");
                 }
-
-                return NoContent();
             }
-            else
-            {
-
-                cliente.Data_ultima_alteracao = DateTime.Now;
-
-                if (id != cliente.Id)
-                {
-                    return BadRequest();
-                }
-
-                List<Grupo> grupos = _context.Grupos.Where(g => g.Id == cliente.Grupo).ToList();
-
-                if (grupos.Count == 0)
-                {
-                    return NotFound(); //grupo nao existe
-                }
-
-                List<Versao> versoes = _context.Versoes.Where(v => v.Id == cliente.Versao_atual).ToList();
-
-                if (versoes.Count == 0)
-                {
-                    return NotFound(); //versao nao existe
-                }
-
-                _context.Entry(cliente).State = EntityState.Modified;
-
-                try
-                {
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!ClienteExists(id))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-
-                DateTime dateTime = DateTime.Now;
-                DateTime horaData = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, Int32.Parse(hora.Split(":")[0]), Int32.Parse(hora.Split(":")[1]), 0);
-
-                //hora de distribuicao
-                if (grupos.Count > 0)
-                {
-                    if (dateTime.Hour < Int32.Parse(hora.Split(":")[0]) || (dateTime.Hour == Int32.Parse(hora.Split(":")[0]) && dateTime.Minute < Int32.Parse(hora.Split(":")[1])))
-                    {
-                        horaData = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, Int32.Parse(hora.Split(":")[0]), Int32.Parse(hora.Split(":")[1]), 0);
-                    }
-                    else
-                    {
-                        horaData = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day + 1, Int32.Parse(hora.Split(":")[0]), Int32.Parse(hora.Split(":")[1]), 0);
-                    }
-                }
-
-                try
-                {
-                    //adiciona versao e cliente à tabela VersaoCliente onde é guarda todas as versoes que cada cliente tem acesso
-                    VersaoCliente versaoCliente = new VersaoCliente { Cliente_ID = cliente.Id, Versao_ID = cliente.Versao_atual, Data_distribuicao = horaData };
-                    _context.VersoesClientes.Add(versaoCliente);
-                    await _context.SaveChangesAsync();
-                }
-                catch (Exception)
-                {
-                    return NotFound(); //ligacao ja existe?
-                }
-
-                return NoContent();
-            }
+            return Ok("ok");
         }
 
         /// <summary>
@@ -218,60 +100,69 @@ namespace OlifelVersionUpdateAPI.Controllers
         /// </summary>
         /// <param name="cliente"></param>
         /// <returns></returns>
-        [HttpPost]
-        [Route("PostCliente")]
+        [HttpPost, Route("PostCliente")]
         public async Task<ActionResult<Cliente>> PostCliente(Cliente cliente)
         {
-            cliente.Data_criacao = DateTime.Now;
-            cliente.Data_ultima_alteracao = DateTime.Now;
+            //todo - falta inserir data de criacao e data de ultima altereacao
 
-            List<Grupo> grupos = _context.Grupos.Where(g => g.Id == cliente.Grupo).ToList();
+            //verificar se o grupo existe
+            var grupo = _context.Grupos.Where(g => g.Id == cliente.Grupo).FirstOrDefault();
 
-            if (grupos.Count == 0)
+            if (grupo == null)
             {
                 return NotFound(); //grupo nao existe
             }
 
-            List<Versao> versoes = _context.Versoes.Where(v => v.Id == cliente.Versao_atual).ToList();
+            //verificar se a versao existe
+            var versao = _context.Versoes.Where(v => v.Id == cliente.Versao_atual).FirstOrDefault();
 
-            if (versoes.Count == 0)
+            if (versao == null)
             {
                 return NotFound(); //versao nao existe
             }
 
-            _context.Clientes.Add(cliente);
-            await _context.SaveChangesAsync();
 
-            DateTime dateTime = DateTime.Now;
-            DateTime horaData = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, Int32.Parse(grupos[0].Hora_distribuicao.Split(":")[0]), Int32.Parse(grupos[0].Hora_distribuicao.Split(":")[1]), 0);
-
-            //hora de distribuicao
-            if (grupos.Count > 0)
+            //adicionar cliente a base de dados
+            using (IDbConnection connection = _dapperConnections.getLicencasConnection())
             {
+                try
+                {
+                    List<Guid> old_ids = connection.Query<Guid>("SELECT ID FROM Terceiros").ToList();
 
-                if (dateTime.Hour < Int32.Parse(grupos[0].Hora_distribuicao.Split(":")[0]) || (dateTime.Hour == Int32.Parse(grupos[0].Hora_distribuicao.Split(":")[0]) && dateTime.Minute < Int32.Parse(grupos[0].Hora_distribuicao.Split(":")[1])))
-                {
-                    horaData = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, Int32.Parse(grupos[0].Hora_distribuicao.Split(":")[0]), Int32.Parse(grupos[0].Hora_distribuicao.Split(":")[1]), 0);
+                    connection.Query("INSERT INTO Terceiros(Classe, Terceiro, Nome, Morada, Localidade, CPostal, email, Telefone, Fax, NIF, obs, Grupo, Versao_atual, Contrato_assistencia, Data_criacao)" +
+                        "VALUES(@Classe, @Terceiro, @Nome, @Morada, @Localidade, @CPostal, @email, @Telefone, @Fax, @NIF, @obs, @Grupo, @Versao_atual, @Contrato_assistencia, @Data_criacao);",
+                        new { cliente.Classe, cliente.Terceiro, cliente.Nome, cliente.Morada, cliente.Localidade, cliente.CPostal, email = cliente.Email, cliente.Telefone, cliente.Fax, cliente.NIF, obs = cliente.Obs, cliente.Grupo, cliente.Versao_atual, cliente.Contrato_assistencia, Data_criacao = DateTime.Now });
+
+                    cliente.Id = connection.Query<Guid>("SELECT ID FROM Terceiros").Except(old_ids).FirstOrDefault();
                 }
-                else
+                catch (Exception)
                 {
-                    horaData = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day + 1, Int32.Parse(grupos[0].Hora_distribuicao.Split(":")[0]), Int32.Parse(grupos[0].Hora_distribuicao.Split(":")[1]), 0);
+                    return Conflict("Conflito de valores. Insert do cliente falhou.");
                 }
             }
 
+            DateTime dateTime = DateTime.Now;
+            DateTime horaData = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, Int32.Parse(grupo.Hora_distribuicao.Split(":")[0]), Int32.Parse(grupo.Hora_distribuicao.Split(":")[1]), 0);
+
+            //se hora de distribuicao ja tiver passado nesse dia, muda pra o dia seguinte
+            if (dateTime.Hour > Int32.Parse(grupo.Hora_distribuicao.Split(":")[0]) || (dateTime.Hour == Int32.Parse(grupo.Hora_distribuicao.Split(":")[0]) && dateTime.Minute >= Int32.Parse(grupo.Hora_distribuicao.Split(":")[1])))
+            {
+                horaData = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day + 1, Int32.Parse(grupo.Hora_distribuicao.Split(":")[0]), Int32.Parse(grupo.Hora_distribuicao.Split(":")[1]), 0);
+            }
+
+            //adiciona versao e cliente à tabela VersaoCliente onde é guarda todas as versoes que cada cliente tem acesso
             try
             {
-                //adiciona versao e cliente à tabela VersaoCliente onde é guarda todas as versoes que cada cliente tem acesso
-                VersaoCliente versaoCliente = new VersaoCliente { Cliente_ID = cliente.Id, Versao_ID = cliente.Versao_atual, Data_distribuicao = horaData };
+                VersaoCliente versaoCliente = new VersaoCliente { Cliente_ID = cliente.Id.ToString(), Versao_ID = cliente.Versao_atual, Data_distribuicao = horaData };
                 _context.VersoesClientes.Add(versaoCliente);
                 await _context.SaveChangesAsync();
             }
             catch (Exception)
             {
-                return NotFound(); //ligacao ja existe?
+                return Conflict("Distribuicao da Versao nao foi guardada.");
             }
 
-            return CreatedAtAction("GetCliente", new { id = cliente.Id }, cliente);
+            return Ok("ok");
         }
 
         /// <summary>
@@ -279,25 +170,41 @@ namespace OlifelVersionUpdateAPI.Controllers
         /// </summary>
         /// <param name="id"></param>
         /// <returns></returns>
-        [HttpDelete]
-        [Route("DeleteCliente")]
-        public async Task<ActionResult<Cliente>> DeleteCliente(string id)
+        [HttpDelete, Route("DeleteCliente")]
+        public async Task<IActionResult> DeleteCliente(string id)
         {
-            var cliente = await _context.Clientes.FindAsync(id);
-            if (cliente == null)
+            if (!ClienteExists(id))
             {
                 return NotFound();
             }
 
-            _context.Clientes.Remove(cliente);
-            await _context.SaveChangesAsync();
-
-            return cliente;
+            using (IDbConnection connection = _dapperConnections.getLicencasConnection())
+            {
+                try
+                {
+                    connection.Query("DELETE FROM Terceiros WHERE Id = @ID", new { ID = id });
+                }
+                catch (Exception)
+                {
+                    return Conflict("Conflito de valores. Delete do cliente falhou.");
+                }
+            }
+            return Ok("ok");
         }
-
         private bool ClienteExists(string id)
         {
-            return _context.Clientes.Any(e => e.Id == id);
+            using (IDbConnection connection = _dapperConnections.getLicencasConnection())
+            {
+                try
+                {
+                    var item = connection.Query("SELECT ID FROM Terceiros WHERE Id LIKE @ID", new { ID = id }).FirstOrDefault();
+                    return item != null;
+                }
+                catch (Exception)
+                {
+                    return false;
+                }
+            }
         }
     }
 }

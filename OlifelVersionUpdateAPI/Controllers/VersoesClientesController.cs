@@ -1,9 +1,14 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Dapper;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using OlifelVersionUpdateAPI.Helpers;
 using OlifelVersionUpdateAPI.Models;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace OlifelVersionUpdateAPI.Controllers
@@ -17,11 +22,14 @@ namespace OlifelVersionUpdateAPI.Controllers
             public string Cliente_ID { get; set; }
             public string Versao_ID { get; set; }
         }
-        private readonly ProjectContext _context;
 
-        public VersoesClientesController(ProjectContext context)
+        private readonly ProjectContext _context;
+        private DapperConnections _dapperConnections;
+
+        public VersoesClientesController(ProjectContext context, IOptions<ConnectionsStrings> connectionConfig)
         {
             _context = context;
+            _dapperConnections = new DapperConnections(connectionConfig: connectionConfig);
         }
 
         /// <summary>
@@ -69,26 +77,60 @@ namespace OlifelVersionUpdateAPI.Controllers
             return versoesClientes;
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="id_c"></param>
+        /// <returns></returns>
         [HttpGet]
         [Route("GetVersaoMaisRecenteDoCliente")]
         public async Task<ActionResult<Versao>> GetVersaoMaisRecenteDoClienteAsync(string id_c)
         {
             List<VersaoCliente> versoesClientes = _context.VersoesClientes.Where(vc => vc.Cliente_ID == id_c).ToList();
 
-            Versao versao_mais_recente = null;
-
-            foreach (var objeto in versoesClientes)
-            {
-
-                var versao = await _context.Versoes.FindAsync(objeto.Versao_ID);
-
-                if (versao_mais_recente == null || versao.Published_at > versao_mais_recente.Published_at)
-                {
-                    versao_mais_recente = versao;
-                }
-            }
+            Versao versao_mais_recente = await _context.Versoes.FindAsync(versoesClientes[versoesClientes.Count - 1].Versao_ID);
 
             return versao_mais_recente;
+        }
+
+        public class VersaoClienteNomes : VersaoCliente
+        {
+            public string Cliente_nome { get; set; }
+            public string Versao_nome { get; set; }
+        }
+
+        /// <summary>
+        ///
+        /// </summary>
+        /// <returns></returns>
+        [HttpGet]
+        [Route("GetVersaoMaisRecenteParaCadaCliente")]
+        public async Task<ActionResult<IEnumerable<VersaoClienteNomes>>> GetVersaoMaisRecenteParaCadaCliente()
+        {
+
+            using (IDbConnection connection = _dapperConnections.getLicencasConnection())
+            {
+                List<Cliente> clientes = connection.Query<Cliente>("SELECT * FROM Terceiros").ToList();
+
+                //List<Cliente> clientes = _context.Clientes.ToListAsync().Result;
+
+                List<VersaoClienteNomes> listaVersoesClientes = new List<VersaoClienteNomes>();
+
+                foreach (var cliente in clientes)
+                {
+                    VersaoCliente versaoCliente = _context.VersoesClientes.Where(vc => vc.Cliente_ID == cliente.Id.ToString()).FirstOrDefault();
+                    if (versaoCliente != null)
+                    {
+                        VersaoClienteNomes versaoClienteNomes = new VersaoClienteNomes { Cliente_ID = versaoCliente.Cliente_ID, Versao_ID = versaoCliente.Versao_ID, Data_distribuicao = versaoCliente.Data_distribuicao };
+
+                        versaoClienteNomes.Cliente_nome = connection.Query<string>("SELECT Nome FROM Terceiros WHERE ID = @Id", new { Id = versaoCliente.Cliente_ID }).FirstOrDefault();
+                        versaoClienteNomes.Versao_nome = _context.Versoes.Where(c => c.Id == versaoCliente.Versao_ID).FirstOrDefault().Tag_name;
+
+                        listaVersoesClientes.Add(versaoClienteNomes);
+                    }
+                }
+                return listaVersoesClientes;
+            }
         }
 
         /// <summary>
@@ -157,19 +199,41 @@ namespace OlifelVersionUpdateAPI.Controllers
             return CreatedAtAction("GetVersaoCliente", new { id_v = versaoCliente.Versao_ID, id_c = versaoCliente.Cliente_ID }, versaoCliente);
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="versaoClienteIDS"></param>
+        /// <param name="hora"></param>
+        /// <returns></returns>
         [HttpPost]
         [Route("PostDistribuirVersaoCliente")]
         public async Task<ActionResult<VersaoClienteIDS>> PostDistribuirVersaoCliente(VersaoClienteIDS versaoClienteIDS, string hora)
-        //public async Task PostDistribuirVersaoClienteAsync(VersaoClienteIDS versaoClienteIDS, string hora)
         {
-            var cliente = await _context.Clientes.FindAsync(versaoClienteIDS.Cliente_ID);
+            //verifica se a hora é valida
+            if (hora != "" && hora != null)
+                if (hora.Split(":").Length != 2)
+                    return BadRequest();
+                else if (hora.Split(":")[0].Length == 0 || hora.Split(":")[1].Length == 0)
+                    return BadRequest();
+                else if (!int.TryParse(hora.Split(":")[0], out int n) || !int.TryParse(hora.Split(":")[1], out int m))
+                    return BadRequest();
+            else if(Int16.Parse(hora.Split(":")[0]) < 0 || Int16.Parse(hora.Split(":")[0]) > 23 || Int16.Parse(hora.Split(":")[1]) < 0 || Int16.Parse(hora.Split(":")[1]) > 59)
+                    return BadRequest();
+
+            return Ok("x");
+
+            if (!Regex.IsMatch(versaoClienteIDS.Cliente_ID.ToLower(), @"(?im)^[{(]?[0-9A-F]{8}[-]?(?:[0-9A-F]{4}[-]?){3}[0-9A-F]{12}[)}]?$"))
+                return BadRequest();
+
+            Cliente cliente = null;
+            using (IDbConnection connection = _dapperConnections.getLicencasConnection())
+            {
+                cliente = connection.Query<Cliente>("SELECT * FROM Terceiros WHERE ID = @Id", new { Id = Guid.Parse(versaoClienteIDS.Cliente_ID) }).FirstOrDefault();
+            }
+
             if (cliente == null)
             {
                 return NotFound();
-            }
-            else
-            {
-                //Console.WriteLine(cliente.Nome);
             }
 
             var versao = await _context.Versoes.FindAsync(versaoClienteIDS.Versao_ID);
@@ -177,27 +241,17 @@ namespace OlifelVersionUpdateAPI.Controllers
             {
                 return NotFound();
             }
-            else
-            {
-                //Console.WriteLine(versao.Tag_name);
-            }
 
             var grupo = await _context.Grupos.FindAsync(cliente.Grupo);
             if (grupo == null)
             {
                 return NotFound();
             }
-            else
-            {
-                //Console.WriteLine(grupo.Nome);
-                //Console.WriteLine(grupo.Hora_distribuicao);
-            }
 
             DateTime dateTime = DateTime.Now;
 
             if (hora == "" || hora == null)
             {
-                Console.WriteLine("nao recebeu hora: " + grupo.Hora_distribuicao);
                 if (dateTime.Hour < Int32.Parse(grupo.Hora_distribuicao.Split(":")[0]) || (dateTime.Hour == Int32.Parse(grupo.Hora_distribuicao.Split(":")[0]) && dateTime.Minute < Int32.Parse(grupo.Hora_distribuicao.Split(":")[1])))
                 {
                     dateTime = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, Int32.Parse(grupo.Hora_distribuicao.Split(":")[0]), Int32.Parse(grupo.Hora_distribuicao.Split(":")[1]), 0);
@@ -209,7 +263,6 @@ namespace OlifelVersionUpdateAPI.Controllers
             }
             else
             {
-                Console.WriteLine("hora recebida: " + hora);
                 if (dateTime.Hour < Int32.Parse(hora.Split(":")[0]) || (dateTime.Hour == Int32.Parse(hora.Split(":")[0]) && dateTime.Minute < Int32.Parse(hora.Split(":")[1])))
                 {
                     dateTime = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, Int32.Parse(hora.Split(":")[0]), Int32.Parse(hora.Split(":")[1]), 0);
@@ -219,12 +272,9 @@ namespace OlifelVersionUpdateAPI.Controllers
                     dateTime = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day + 1, Int32.Parse(hora.Split(":")[0]), Int32.Parse(hora.Split(":")[1]), 0);
                 }
             }
-            Console.WriteLine("data de distribuicao: " + dateTime);
 
             VersaoCliente versaoCliente = new VersaoCliente { Cliente_ID = versaoClienteIDS.Cliente_ID, Versao_ID = versaoClienteIDS.Versao_ID, Data_distribuicao = dateTime };
-            Console.WriteLine("\n" + versaoCliente.Cliente_ID + "\n" + versaoCliente.Versao_ID + "\n" + versaoCliente.Data_distribuicao);
 
-            
             _context.VersoesClientes.Add(versaoCliente);
             try
             {
@@ -232,18 +282,24 @@ namespace OlifelVersionUpdateAPI.Controllers
             }
             catch (DbUpdateException)
             {
-                if (VersaoClienteExists(versaoCliente.Versao_ID, versaoCliente.Cliente_ID))
+                _context.Entry(versaoCliente).State = EntityState.Modified;
+                try
                 {
-                    return Conflict();
+                    await _context.SaveChangesAsync();
                 }
-                else
+                catch (Exception)
                 {
-                    throw;
+                    if (VersaoClienteExists(versaoCliente.Versao_ID, versaoCliente.Cliente_ID))
+                    {
+                        return Conflict();
+                    }
+                    else
+                    {
+                        throw;
+                    }
                 }
             }
-
             return CreatedAtAction("GetVersaoCliente", new { id_v = versaoCliente.Versao_ID, id_c = versaoCliente.Cliente_ID }, versaoCliente);
-            
         }
 
         /// <summary>

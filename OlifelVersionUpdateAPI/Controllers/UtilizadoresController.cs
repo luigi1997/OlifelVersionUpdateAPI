@@ -19,6 +19,12 @@ namespace OlifelVersionUpdateAPI.Controllers
             _context = context;
         }
 
+        public class UserData
+        {
+            public string Email { get; set; }
+            public string Password { get; set; }
+        }
+
         /// <summary>
         /// 
         /// </summary>
@@ -67,6 +73,7 @@ namespace OlifelVersionUpdateAPI.Controllers
 
             return Ok(utilizadores[0].Admin.ToString());
         }
+
         /// <summary>
         /// 
         /// </summary>
@@ -175,12 +182,6 @@ namespace OlifelVersionUpdateAPI.Controllers
         private bool UtilizadorExists(string id)
         {
             return _context.Utilizadores.Any(e => e.Id == id);
-        }
-
-        public class UserData
-        {
-            public string Email { get; set; }
-            public string Password { get; set; }
         }
     }
 }
