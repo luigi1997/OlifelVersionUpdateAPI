@@ -1,0 +1,243 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>OlifelVersionUpdateAPI</name>
+    </assembly>
+    <members>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.ClientesController.GetClientes">
+            <summary>
+            Devolve todos os Clientes
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.ClientesController.GetCliente(System.String)">
+            <summary>
+            
+            </summary>
+            <param name="id"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.ClientesController.PutCliente(System.String,OlifelVersionUpdateAPI.Models.Cliente)">
+            <summary>
+            
+            </summary>
+            <param name="id"></param>
+            <param name="cliente"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.ClientesController.PostCliente(OlifelVersionUpdateAPI.Models.Cliente)">
+            <summary>
+            
+            </summary>
+            <param name="cliente"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.ClientesController.DeleteCliente(System.String)">
+            <summary>
+            
+            </summary>
+            <param name="id"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.GruposController.GetGrupos">
+            <summary>
+            
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.GruposController.GetGrupo(System.String)">
+            <summary>
+            
+            </summary>
+            <param name="id"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.GruposController.PutGrupo(System.String,OlifelVersionUpdateAPI.Models.Grupo)">
+            <summary>
+            
+            </summary>
+            <param name="id"></param>
+            <param name="grupo"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.GruposController.PostGrupo(OlifelVersionUpdateAPI.Models.Grupo)">
+            <summary>
+            
+            </summary>
+            <param name="grupo"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.GruposController.DeleteGrupo(System.String)">
+            <summary>
+            
+            </summary>
+            <param name="id"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.LicencasController.#ctor(Microsoft.Extensions.Options.IOptions{OlifelVersionUpdateAPI.Helpers.ConnectionsStrings},Microsoft.Extensions.Logging.ILogger{OlifelVersionUpdateAPI.Controllers.LicencasController})">
+            <summary>
+            Metodo Construtor de controller que recebe um connectionConfig para fazer a ligação à bd
+            </summary>
+            <param name="connectionConfig"></param>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.LicencasController.TemLicencasNovas(System.String)">
+            <summary>
+            Verificar se tem licenças para importar
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.LicencasController.ImportaLicenca(System.Int32)">
+            <summary>
+            Marca licenca como não sendo nova
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.LicencasController.ObterLicencas(System.String)">
+            <summary>
+            Obtem licenças novas atraves do NIF da empresa
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.LicencasController.ImportaLicenca(System.String)">
+            <summary>
+            Importa licenças
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.UtilizadoresController.GetUtilizadores">
+            <summary>
+            
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.UtilizadoresController.GetUtilizador(System.String)">
+            <summary>
+            
+            </summary>
+            <param name="id"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.UtilizadoresController.CheckUtilizador(OlifelVersionUpdateAPI.Controllers.UtilizadoresController.UserData)">
+            <summary>
+            
+            </summary>
+            <param name="utilizador"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.UtilizadoresController.PutUtilizador(System.String,OlifelVersionUpdateAPI.Models.Utilizador)">
+            <summary>
+            
+            </summary>
+            <param name="id"></param>
+            <param name="utilizador"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.UtilizadoresController.PostUtilizador(OlifelVersionUpdateAPI.Models.Utilizador)">
+            <summary>
+            
+            </summary>
+            <param name="utilizador"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.UtilizadoresController.DeleteUtilizador(System.String)">
+            <summary>
+            
+            </summary>
+            <param name="id"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.VersoesClientesController.GetVersoesClientes">
+            <summary>
+            
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.VersoesClientesController.GetVersaoCliente(System.String,System.String)">
+            <summary>
+            
+            </summary>
+            <param name="id_v"></param>
+            <param name="id_c"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.VersoesClientesController.GetVersoesDoCliente(System.String)">
+            <summary>
+            
+            </summary>
+            <param name="id_c"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.VersoesClientesController.GetVersaoMaisRecenteDoClienteAsync(System.String)">
+            <summary>
+            
+            </summary>
+            <param name="id_c"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.VersoesClientesController.GetVersaoMaisRecenteParaCadaCliente">
+             <summary>
+            
+             </summary>
+             <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.VersoesClientesController.PutVersaoCliente(System.String,System.String,OlifelVersionUpdateAPI.Models.VersaoCliente)">
+            <summary>
+            
+            </summary>
+            <param name="id_v"></param>
+            <param name="id_c"></param>
+            <param name="versaoCliente"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.VersoesClientesController.PostVersaoCliente(OlifelVersionUpdateAPI.Models.VersaoCliente)">
+            <summary>
+            
+            </summary>
+            <param name="versaoCliente"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.VersoesClientesController.PostDistribuirVersaoCliente(OlifelVersionUpdateAPI.Controllers.VersoesClientesController.VersaoClienteIDS,System.String)">
+            <summary>
+            
+            </summary>
+            <param name="versaoClienteIDS"></param>
+            <param name="hora"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.VersoesClientesController.DeleteVersaoCliente(System.String,System.String)">
+            <summary>
+            
+            </summary>
+            <param name="id_v"></param>
+            <param name="id_c"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.VersoesController.GetVersoes">
+            <summary>
+            
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.VersoesController.GetVersao(System.String)">
+            <summary>
+            
+            </summary>
+            <param name="id"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.VersoesController.PostVersao(OlifelVersionUpdateAPI.Models.Versao)">
+            <summary>
+            
+            </summary>
+            <param name="versao"></param>
+            <returns></returns>
+        </member>
+        <member name="M:OlifelVersionUpdateAPI.Controllers.VersoesController.DeleteVersao(System.String)">
+            <summary>
+            
+            </summary>
+            <param name="id"></param>
+            <returns></returns>
+        </member>
+    </members>
+</doc>

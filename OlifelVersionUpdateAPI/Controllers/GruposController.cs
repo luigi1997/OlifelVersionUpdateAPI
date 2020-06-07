@@ -1,8 +1,12 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Dapper;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using OlifelVersionUpdateAPI.Helpers;
 using OlifelVersionUpdateAPI.Models;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -13,10 +17,12 @@ namespace OlifelVersionUpdateAPI.Controllers
     public class GruposController : ControllerBase
     {
         private readonly ProjectContext _context;
+        private DapperConnections _dapperConnections;
 
-        public GruposController(ProjectContext context)
+        public GruposController(ProjectContext context, IOptions<ConnectionsStrings> connectionConfig)
         {
             _context = context;
+            _dapperConnections = new DapperConnections(connectionConfig);
         }
 
         /// <summary>
@@ -120,12 +126,14 @@ namespace OlifelVersionUpdateAPI.Controllers
             {
                 return NotFound();
             }
-
-            List<Cliente> clientes = _context.Clientes.Where(c => c.Grupo.ToString() == id).ToList();
-
-            if (clientes.Count > 0)
+            using (IDbConnection connection = _dapperConnections.getLicencasConnection())
             {
-                return NotFound(); //grupo tem clientes ligados a ele
+                var result = connection.Query("SELECT * FROM Terceiros").ToList().Where(c => c.Grupo.ToString() == id).ToList();
+
+                if (result.Count > 0)
+                {
+                    return Conflict("Grupo nao pode ser apagado. Tem Clientes que pertencem a esse grupo."); //grupo tem clientes ligados a ele
+                }
             }
 
             _context.Grupos.Remove(grupo);

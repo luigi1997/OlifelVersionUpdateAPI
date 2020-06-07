@@ -27,7 +27,6 @@ namespace OlifelVersionUpdateAPI
             try
             {
                 var context = services.GetRequiredService<ProjectContext>();
-                //context.Database.EnsureCreated();
                 DBInitializer.Initialize(context);
             }
             catch (Exception ex)

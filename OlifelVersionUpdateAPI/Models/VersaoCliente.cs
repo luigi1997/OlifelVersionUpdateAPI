@@ -12,6 +12,6 @@ namespace OlifelVersionUpdateAPI.Models
         [Required]
         public string Versao_ID { get; set; }
         [Required]
-        public DateTime Data_distribuicao { get; set; }
+        public DateTime? Data_distribuicao { get; set; }
     }
 }

@@ -8,26 +8,21 @@ namespace OlifelVersionUpdateAPI.Models
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public string Id { get; set; }
-        [Required]
+        public Guid? Id { get; set; }
         public string Nome { get; set; }
-        [Required]
         public int Grupo { get; set; }
-        [Required]
         public string Versao_atual { get; set; }
-        [Required]
-        public DateTime Data_limite_atualizacoes { get; set; }
-        [Required]
-        public DateTime Data_limite_funcionamento { get; set; }
-        [Required]
         public bool Contrato_assistencia { get; set; }
         public DateTime? Data_criacao { get; set; }
-        public DateTime? Data_ultima_alteracao { get; set; }
-        [Required]
         public string Classe { get; set; }
-        [Required]
         public string Terceiro { get; set; }
-        [Required]
-        public int Numero_postos { get; set; }
+        public string Morada { get; set; }
+        public string Localidade { get; set; }
+        public string CPostal { get; set; }
+        public string Email { get; set; }
+        public string Telefone { get; set; }
+        public string Fax { get; set; }
+        public string NIF { get; set; }
+        public string Obs { get; set; }
     }
 }
