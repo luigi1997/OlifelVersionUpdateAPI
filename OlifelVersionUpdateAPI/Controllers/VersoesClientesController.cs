@@ -217,10 +217,8 @@ namespace OlifelVersionUpdateAPI.Controllers
                     return BadRequest();
                 else if (!int.TryParse(hora.Split(":")[0], out int n) || !int.TryParse(hora.Split(":")[1], out int m))
                     return BadRequest();
-            else if(Int16.Parse(hora.Split(":")[0]) < 0 || Int16.Parse(hora.Split(":")[0]) > 23 || Int16.Parse(hora.Split(":")[1]) < 0 || Int16.Parse(hora.Split(":")[1]) > 59)
+                else if (Int16.Parse(hora.Split(":")[0]) < 0 || Int16.Parse(hora.Split(":")[0]) > 23 || Int16.Parse(hora.Split(":")[1]) < 0 || Int16.Parse(hora.Split(":")[1]) > 59)
                     return BadRequest();
-
-            return Ok("x");
 
             if (!Regex.IsMatch(versaoClienteIDS.Cliente_ID.ToLower(), @"(?im)^[{(]?[0-9A-F]{8}[-]?(?:[0-9A-F]{4}[-]?){3}[0-9A-F]{12}[)}]?$"))
                 return BadRequest();
