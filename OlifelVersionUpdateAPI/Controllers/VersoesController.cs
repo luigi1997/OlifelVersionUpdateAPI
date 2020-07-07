@@ -1,10 +1,12 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+﻿using Dapper;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using OlifelVersionUpdateAPI.Helpers;
 using OlifelVersionUpdateAPI.Models;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace OlifelVersionUpdateAPI.Controllers
 {
@@ -12,131 +14,145 @@ namespace OlifelVersionUpdateAPI.Controllers
     [ApiController]
     public class VersoesController : ControllerBase
     {
-        private readonly ProjectContext _context;
+        private DapperConnections _dapperConnections;
 
-        public VersoesController(ProjectContext context)
+        public VersoesController(IOptions<ConnectionsStrings> connectionConfig)
         {
-            _context = context;
+            _dapperConnections = new DapperConnections(connectionConfig);
         }
 
         /// <summary>
-        /// 
+        /// Obter todas as versoes
         /// </summary>
         /// <returns></returns>
-        [HttpGet]
-        [Route("GetVersoes")]
-        public async Task<ActionResult<IEnumerable<Versao>>> GetVersoes()
+        [HttpGet, Route("GetVersoes")]
+        public ActionResult<IEnumerable<Versao>> GetVersoes()
         {
-            return await _context.Versoes.ToListAsync();
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
+
+            List<Versao> result = connection.Query<Versao>("SELECT * FROM Versoes").ToList();
+
+            return result;
         }
 
         /// <summary>
-        /// 
+        /// Obter um versao, dado o id
         /// </summary>
         /// <param name="id"></param>
         /// <returns></returns>
-        [HttpGet]
-        [Route("GetVersao")]
-        public async Task<ActionResult<Versao>> GetVersao(string id)
+        [HttpGet, Route("GetVersao")]
+        public ActionResult<Versao> GetVersao(string id)
         {
-            var versao = await _context.Versoes.FindAsync(id);
-
-            if (versao == null)
+            if (!VersaoExists(id))
             {
                 return NotFound();
             }
 
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
+
+            Versao versao = connection.Query<Versao>("SELECT * FROM Versoes WHERE Id LIKE @ID", new { ID = id }).FirstOrDefault();
+
             return versao;
         }
 
-        [HttpPut]
-        [Route("PutVersao")]
-        public async Task<IActionResult> PutVersao(string id, Versao versao)
+        /// <summary>
+        /// Editar uma versao
+        /// </summary>
+        /// <param name="id"></param>
+        /// <param name="versao"></param>
+        /// <returns></returns>
+        [HttpPut, Route("PutVersao")]
+        public IActionResult PutVersao(string id, Versao versao)
         {
-            if (id != versao.Id)
+            if (!string.Equals(id, versao.Id.ToString(), StringComparison.CurrentCultureIgnoreCase))
             {
                 return BadRequest();
             }
 
-            _context.Entry(versao).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!VersaoExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return NoContent();
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="versao"></param>
-        /// <returns></returns>
-        [HttpPost]
-        [Route("PostVersao")]
-        public async Task<ActionResult<Versao>> PostVersao(Versao versao)
-        {
-            versao.Distribuida = true;
-
-            List<Versao> versoes = _context.Versoes.Where(v => v.Id == versao.Id).ToList();
-            if (versoes.Count > 0)
-            {
-                return Ok("Versao_ja_existe_na_BD");
-            }
-
-            try
-            {
-                _context.Versoes.Add(versao);
-                await _context.SaveChangesAsync();
-            }
-            catch (Exception e) { Console.WriteLine(e); }
-            return CreatedAtAction("GetVersao", new { id = versao.Id }, versao);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="id"></param>
-        /// <returns></returns>
-        [HttpDelete]
-        [Route("DeleteVersao")]
-        public async Task<ActionResult<Versao>> DeleteVersao(string id)
-        {
-            var versao = await _context.Versoes.FindAsync(id);
-
-            if (versao == null)
+            if (!VersaoExists(id))
             {
                 return NotFound();
             }
 
-            List<VersaoCliente> versoesclientes = _context.VersoesClientes.Where(vc => vc.Versao_ID.ToString() == id).ToList();
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
 
-            if (versoesclientes.Count > 0)
+            try
             {
-                return NotFound(); //versao tem clientes ligados a ele
+                connection.Query("UPDATE Versoes SET Tag_name = @Tag_name, Name = @Name, Body = @Body, Published_at = @Published_at WHERE Id LIKE @id", new { versao.Tag_name, versao.Name, versao.Body, versao.Published_at, id });
+                return Ok("Ok");
+            }
+            catch (Exception)
+            {
+                return Conflict("Conflito de valores. Update da versao falhou.");
+            }
+        }
+
+        /// <summary>
+        /// Inserir uma versao
+        /// </summary>
+        /// <param name="versao"></param>
+        /// <returns></returns>
+        [HttpPost, Route("PostVersao")]
+        public ActionResult<Versao> PostVersao(Versao versao)
+        {
+            if (VersaoExists(versao.Id))
+            {
+                return Ok("Versao ja foi distribuida.");
             }
 
-            _context.Versoes.Remove(versao);
-            await _context.SaveChangesAsync();
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
 
-            return versao;
+            try
+            {
+                connection.Query("INSERT INTO Versoes(Id, Tag_name, Name, Body, Published_at) VALUES(@Id, @Tag_name, @Name, @Body, @Published_at)",
+                    new { versao.Id, versao.Tag_name, versao.Name, versao.Body, versao.Published_at });
+                return Ok("Ok");
+            }
+            catch (Exception)
+            {
+                return Conflict("Conflito de valores. Insert da versao falhou.");
+            }
+        }
+
+        /// <summary>
+        /// Apagar uma versao
+        /// </summary>
+        /// <param name="id"></param>
+        /// <returns></returns>
+        [HttpDelete, Route("DeleteVersao")]
+        public ActionResult<Versao> DeleteVersao(string id)
+        {
+            if (!VersaoExists(id))
+            {
+                return NotFound();
+            }
+
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
+
+            try
+            {
+                connection.Query("DELETE FROM Versoes WHERE Id LIKE @ID", new { ID = id });
+                return Ok("Ok");
+            }
+            catch (Exception)
+            {
+                return Conflict("Conflito de valores. Delete da versao falhou.");
+            }
         }
 
         private bool VersaoExists(string id)
         {
-            return _context.Versoes.Any(e => e.Id == id);
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
+
+            try
+            {
+                var item = connection.Query("SELECT ID FROM Versoes WHERE Id LIKE @ID", new { ID = id }).FirstOrDefault();
+                return item != null;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
     }
 }

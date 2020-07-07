@@ -20,14 +20,18 @@ namespace OlifelVersionUpdateAPI
             Configuration = configuration;
         }
 
-        public IConfiguration Configuration { get; set; }
+
+        public IConfiguration Configuration { get; } = new ConfigurationBuilder()
+            .SetBasePath(Directory.GetCurrentDirectory())
+            .AddJsonFile("appsettings.json", optional: false)
+            .Build();
 
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
 
             services.AddDbContext<ProjectContext>(options => options.UseSqlServer(Configuration.GetConnectionString("OlifelVersionUpdateBD")));
-            
+
             services.AddControllers();
 
             // Register the Swagger generator, defining 1 or more Swagger documents
@@ -44,7 +48,6 @@ namespace OlifelVersionUpdateAPI
 
             services.AddCors(options =>
             {
-
                 options.AddDefaultPolicy(
                     builder =>
                     {
@@ -68,12 +71,11 @@ namespace OlifelVersionUpdateAPI
 
             app.UseDefaultFiles();
             app.UseStaticFiles();
-
             app.UseHttpsRedirection();
-
             app.UseRouting();
-
             app.UseCors();
+            app.UseAuthentication();
+            app.UseAuthorization();
 
             // Enable middleware to serve generated Swagger as a JSON endpoint.
             app.UseSwagger();
@@ -84,16 +86,6 @@ namespace OlifelVersionUpdateAPI
             {
                 c.SwaggerEndpoint("/swagger/v1/swagger.json", "Olifel Version Update API");
                 c.RoutePrefix = string.Empty;
-            });
-
-            app.UseRouting();
-
-            app.UseAuthentication();
-            app.UseAuthorization();
-
-            app.UseEndpoints(endpoints =>
-            {
-                endpoints.MapControllers();
             });
 
             app.UseEndpoints(endpoints =>

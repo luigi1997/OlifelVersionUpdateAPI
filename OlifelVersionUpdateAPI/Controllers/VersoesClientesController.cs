@@ -1,6 +1,5 @@
 ﻿using Dapper;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using OlifelVersionUpdateAPI.Helpers;
 using OlifelVersionUpdateAPI.Models;
@@ -8,8 +7,6 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
 namespace OlifelVersionUpdateAPI.Controllers
 {
@@ -17,18 +14,16 @@ namespace OlifelVersionUpdateAPI.Controllers
     [ApiController]
     public class VersoesClientesController : ControllerBase
     {
-        public class VersaoClienteIDS
+        public class VersaoClienteNomes : VersaoCliente
         {
-            public string Cliente_ID { get; set; }
-            public string Versao_ID { get; set; }
+            public string Cliente_nome { get; set; }
+            public string Versao_nome { get; set; }
         }
 
-        private readonly ProjectContext _context;
         private DapperConnections _dapperConnections;
 
-        public VersoesClientesController(ProjectContext context, IOptions<ConnectionsStrings> connectionConfig)
+        public VersoesClientesController(IOptions<ConnectionsStrings> connectionConfig)
         {
-            _context = context;
             _dapperConnections = new DapperConnections(connectionConfig: connectionConfig);
         }
 
@@ -36,29 +31,33 @@ namespace OlifelVersionUpdateAPI.Controllers
         /// 
         /// </summary>
         /// <returns></returns>
-        [HttpGet]
-        [Route("GetVersoesClientes")]
-        public async Task<ActionResult<IEnumerable<VersaoCliente>>> GetVersoesClientes()
+        [HttpGet, Route("GetVersoesClientes")]
+        public ActionResult<IEnumerable<VersaoCliente>> GetVersoesClientes()
         {
-            return await _context.VersoesClientes.ToListAsync();
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
+
+            List<VersaoCliente> result = connection.Query<VersaoCliente>("SELECT * FROM VersoesClientes").ToList();
+
+            return result;
         }
 
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="id_v"></param>
         /// <param name="id_c"></param>
+        /// <param name="id_v"></param>
         /// <returns></returns>
-        [HttpGet]
-        [Route("GetVersaoCliente")]
-        public async Task<ActionResult<VersaoCliente>> GetVersaoCliente(string id_v, string id_c)
+        [HttpGet, Route("GetVersaoCliente")]
+        public ActionResult<VersaoCliente> GetVersaoCliente(string id_c, string id_v)
         {
-            var versaoCliente = await _context.VersoesClientes.FindAsync(id_c, id_v);
-
-            if (versaoCliente == null)
+            if (!VersaoClienteExists(id_c, id_v))
             {
                 return NotFound();
             }
+
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
+
+            VersaoCliente versaoCliente = connection.Query<VersaoCliente>("SELECT * FROM VersoesClientes WHERE Cliente_ID LIKE @Cliente_ID AND Versao_ID LIKE @Versao_ID", new { Cliente_ID = id_c, Versao_ID = id_v }).FirstOrDefault();
 
             return versaoCliente;
         }
@@ -68,13 +67,19 @@ namespace OlifelVersionUpdateAPI.Controllers
         /// </summary>
         /// <param name="id_c"></param>
         /// <returns></returns>
-        [HttpGet]
-        [Route("GetVersoesDoCliente")]
+        [HttpGet, Route("GetVersoesDoCliente")]
         public ActionResult<IEnumerable<VersaoCliente>> GetVersoesDoCliente(string id_c)
         {
-            List<VersaoCliente> versoesClientes = _context.VersoesClientes.Where(vc => vc.Cliente_ID == id_c).ToList();
+            if (!ClienteExists(id_c))
+            {
+                return NotFound();
+            }
 
-            return versoesClientes;
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
+
+            List<VersaoCliente> versoesCliente = connection.Query<VersaoCliente>("SELECT * FROM VersoesClientes WHERE Cliente_ID LIKE @Cliente_ID", new { Cliente_ID = id_c }).ToList();
+
+            return versoesCliente;
         }
 
         /// <summary>
@@ -82,92 +87,84 @@ namespace OlifelVersionUpdateAPI.Controllers
         /// </summary>
         /// <param name="id_c"></param>
         /// <returns></returns>
-        [HttpGet]
-        [Route("GetVersaoMaisRecenteDoCliente")]
-        public async Task<ActionResult<Versao>> GetVersaoMaisRecenteDoClienteAsync(string id_c)
+        [HttpGet, Route("GetVersaoMaisRecenteDoCliente")]
+        public ActionResult<Versao> GetVersaoMaisRecenteDoCliente(string id_c)
         {
-            List<VersaoCliente> versoesClientes = _context.VersoesClientes.Where(vc => vc.Cliente_ID == id_c).ToList();
+            if (!ClienteExists(id_c))
+            {
+                return NotFound();
+            }
 
-            Versao versao_mais_recente = await _context.Versoes.FindAsync(versoesClientes[versoesClientes.Count - 1].Versao_ID);
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
 
-            return versao_mais_recente;
-        }
+            string id_versao_mais_recente = connection.Query<string>("SELECT MAX(Versao_ID) FROM VersoesClientes WHERE Cliente_ID LIKE @Cliente_ID", new { Cliente_ID = id_c }).FirstOrDefault();
 
-        public class VersaoClienteNomes : VersaoCliente
-        {
-            public string Cliente_nome { get; set; }
-            public string Versao_nome { get; set; }
+            Versao versao = connection.Query<Versao>("SELECT * FROM Versoes WHERE Id LIKE @Id", new { Id = id_versao_mais_recente }).FirstOrDefault();
+
+            return versao;
         }
 
         /// <summary>
         ///
         /// </summary>
         /// <returns></returns>
-        [HttpGet]
-        [Route("GetVersaoMaisRecenteParaCadaCliente")]
-        public async Task<ActionResult<IEnumerable<VersaoClienteNomes>>> GetVersaoMaisRecenteParaCadaCliente()
+        [HttpGet, Route("GetVersaoMaisRecenteParaCadaCliente")]
+        public ActionResult<IEnumerable<VersaoClienteNomes>> GetVersaoMaisRecenteParaCadaCliente()
         {
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
 
-            using (IDbConnection connection = _dapperConnections.getLicencasConnection())
+            List<Cliente> clientes = connection.Query<Cliente>("SELECT * FROM Terceiros").ToList();
+
+            List<VersaoClienteNomes> listaVersoesClientes = new List<VersaoClienteNomes>();
+
+            foreach (var cliente in clientes)
             {
-                List<Cliente> clientes = connection.Query<Cliente>("SELECT * FROM Terceiros").ToList();
+                string id_versao_mais_recente = connection.Query<string>("SELECT MAX(Versao_ID) FROM VersoesClientes WHERE Cliente_ID LIKE @Cliente_ID", new { Cliente_ID = cliente.Id }).FirstOrDefault();
 
-                //List<Cliente> clientes = _context.Clientes.ToListAsync().Result;
+                VersaoClienteNomes versaoClienteNomes = connection.Query<VersaoClienteNomes>("SELECT * FROM VersoesClientes WHERE Cliente_ID LIKE @Cliente_ID AND Versao_ID LIKE @Versao_ID", new { Cliente_ID = cliente.Id, Versao_ID = id_versao_mais_recente }).FirstOrDefault();
 
-                List<VersaoClienteNomes> listaVersoesClientes = new List<VersaoClienteNomes>();
-
-                foreach (var cliente in clientes)
+                if (versaoClienteNomes != null)
                 {
-                    VersaoCliente versaoCliente = _context.VersoesClientes.Where(vc => vc.Cliente_ID == cliente.Id.ToString()).FirstOrDefault();
-                    if (versaoCliente != null)
-                    {
-                        VersaoClienteNomes versaoClienteNomes = new VersaoClienteNomes { Cliente_ID = versaoCliente.Cliente_ID, Versao_ID = versaoCliente.Versao_ID, Data_distribuicao = versaoCliente.Data_distribuicao };
+                    versaoClienteNomes.Cliente_nome = cliente.Nome;
+                    versaoClienteNomes.Versao_nome = connection.Query<string>("SELECT Tag_name FROM Versoes WHERE Id = @ID", new { ID = id_versao_mais_recente }).FirstOrDefault();
 
-                        versaoClienteNomes.Cliente_nome = connection.Query<string>("SELECT Nome FROM Terceiros WHERE ID = @Id", new { Id = versaoCliente.Cliente_ID }).FirstOrDefault();
-                        versaoClienteNomes.Versao_nome = _context.Versoes.Where(c => c.Id == versaoCliente.Versao_ID).FirstOrDefault().Tag_name;
-
-                        listaVersoesClientes.Add(versaoClienteNomes);
-                    }
+                    listaVersoesClientes.Add(versaoClienteNomes);
                 }
-                return listaVersoesClientes;
             }
+            return listaVersoesClientes;
         }
 
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="id_v"></param>
         /// <param name="id_c"></param>
+        /// <param name="id_v"></param>
         /// <param name="versaoCliente"></param>
         /// <returns></returns>
-        [HttpPut]
-        [Route("PutVersaoCliente")]
-        public async Task<IActionResult> PutVersaoCliente(string id_v, string id_c, VersaoCliente versaoCliente)
+        [HttpPut, Route("PutVersaoCliente")]
+        public IActionResult PutVersaoCliente(string id_c, string id_v, VersaoCliente versaoCliente)
         {
-            if (id_v != versaoCliente.Versao_ID && id_c != versaoCliente.Cliente_ID)
+            if (!string.Equals(id_c, versaoCliente.Cliente_ID.ToString(), StringComparison.CurrentCultureIgnoreCase) || !string.Equals(id_v, versaoCliente.Versao_ID.ToString(), StringComparison.CurrentCultureIgnoreCase))
             {
                 return BadRequest();
             }
 
-            _context.Entry(versaoCliente).State = EntityState.Modified;
+            if (!VersaoClienteExists(id_c, id_v))
+            {
+                return NotFound();
+            }
+
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
 
             try
             {
-                await _context.SaveChangesAsync();
+                connection.Query("UPDATE VersoesClientes SET Data_distribuicao = @Data_distribuicao WHERE Cliente_ID LIKE @Cliente_ID AND Versao_ID LIKE @Versao_ID", new { versaoCliente.Data_distribuicao, versaoCliente.Cliente_ID, versaoCliente.Versao_ID });
+                return Ok("Ok. VersaoCliente atualizada.");
             }
-            catch (DbUpdateConcurrencyException)
+            catch (Exception)
             {
-                if (!VersaoClienteExists(id_v, id_c))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
+                return Conflict("Conflito de valores. Update da versaoCliente falhou.");
             }
-
-            return NoContent();
         }
 
         /// <summary>
@@ -175,39 +172,31 @@ namespace OlifelVersionUpdateAPI.Controllers
         /// </summary>
         /// <param name="versaoCliente"></param>
         /// <returns></returns>
-        [HttpPost]
-        [Route("PostVersaoCliente")]
-        public async Task<ActionResult<VersaoCliente>> PostVersaoCliente(VersaoCliente versaoCliente)
+        [HttpPost, Route("PostVersaoCliente")]
+        public ActionResult<VersaoCliente> PostVersaoCliente(VersaoCliente versaoCliente)
         {
-            _context.VersoesClientes.Add(versaoCliente);
-            try
+            if (VersaoClienteExists(versaoCliente.Cliente_ID.ToString(), versaoCliente.Versao_ID))
             {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateException)
-            {
-                if (VersaoClienteExists(versaoCliente.Versao_ID, versaoCliente.Cliente_ID))
-                {
-                    return Conflict();
-                }
-                else
-                {
-                    throw;
-                }
+                PutVersaoCliente(versaoCliente.Cliente_ID.ToString(), versaoCliente.Versao_ID, versaoCliente);
+                return Ok("Ok. VersaoCliente atualizada.");
             }
 
-            return CreatedAtAction("GetVersaoCliente", new { id_v = versaoCliente.Versao_ID, id_c = versaoCliente.Cliente_ID }, versaoCliente);
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
+
+            connection.Query("INSERT INTO VersoesClientes(Cliente_ID, Versao_ID, Data_distribuicao) VALUES(@Cliente_ID, @Versao_ID, @Data_distribuicao)",
+                    new { versaoCliente.Cliente_ID, versaoCliente.Versao_ID, versaoCliente.Data_distribuicao });
+
+            return Ok("Ok. VersaoCliente inserida.");
         }
 
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="versaoClienteIDS"></param>
+        /// <param name="versaoCliente"></param>
         /// <param name="hora"></param>
         /// <returns></returns>
-        [HttpPost]
-        [Route("PostDistribuirVersaoCliente")]
-        public async Task<ActionResult<VersaoClienteIDS>> PostDistribuirVersaoCliente(VersaoClienteIDS versaoClienteIDS, string hora)
+        [HttpPost, Route("PostDistribuirVersaoCliente")]
+        public ActionResult<VersaoCliente> PostDistribuirVersaoCliente(VersaoCliente versaoCliente, string hora)
         {
             //verifica se a hora é valida
             if (hora != "" && hora != null)
@@ -219,112 +208,134 @@ namespace OlifelVersionUpdateAPI.Controllers
                     return BadRequest();
                 else if (Int16.Parse(hora.Split(":")[0]) < 0 || Int16.Parse(hora.Split(":")[0]) > 23 || Int16.Parse(hora.Split(":")[1]) < 0 || Int16.Parse(hora.Split(":")[1]) > 59)
                     return BadRequest();
+            
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
 
-            if (!Regex.IsMatch(versaoClienteIDS.Cliente_ID.ToLower(), @"(?im)^[{(]?[0-9A-F]{8}[-]?(?:[0-9A-F]{4}[-]?){3}[0-9A-F]{12}[)}]?$"))
-                return BadRequest();
-
-            Cliente cliente = null;
-            using (IDbConnection connection = _dapperConnections.getLicencasConnection())
-            {
-                cliente = connection.Query<Cliente>("SELECT * FROM Terceiros WHERE ID = @Id", new { Id = Guid.Parse(versaoClienteIDS.Cliente_ID) }).FirstOrDefault();
-            }
+            Cliente cliente = connection.Query<Cliente>("SELECT * FROM Terceiros WHERE ID LIKE @Id", new { Id = versaoCliente.Cliente_ID }).FirstOrDefault();
 
             if (cliente == null)
             {
                 return NotFound();
             }
 
-            var versao = await _context.Versoes.FindAsync(versaoClienteIDS.Versao_ID);
-            if (versao == null)
-            {
-                return NotFound();
-            }
+            //verificar se o grupo existe
+            Grupo grupo = connection.Query<Grupo>("SELECT * FROM Grupos WHERE Id LIKE @ID", new { ID = cliente.Grupo }).FirstOrDefault();
 
-            var grupo = await _context.Grupos.FindAsync(cliente.Grupo);
             if (grupo == null)
             {
-                return NotFound();
+                return NotFound(); //grupo nao existe
             }
 
-            DateTime dateTime = DateTime.Now;
+            //verificar se a versao existe
+            Versao versao = connection.Query<Versao>("SELECT * FROM Versoes WHERE Id LIKE @ID", new { ID = versaoCliente.Versao_ID }).FirstOrDefault();
 
-            if (hora == "" || hora == null)
+            if (versao == null)
             {
-                if (dateTime.Hour < Int32.Parse(grupo.Hora_distribuicao.Split(":")[0]) || (dateTime.Hour == Int32.Parse(grupo.Hora_distribuicao.Split(":")[0]) && dateTime.Minute < Int32.Parse(grupo.Hora_distribuicao.Split(":")[1])))
-                {
-                    dateTime = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, Int32.Parse(grupo.Hora_distribuicao.Split(":")[0]), Int32.Parse(grupo.Hora_distribuicao.Split(":")[1]), 0);
-                }
-                else
-                {
-                    dateTime = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day + 1, Int32.Parse(grupo.Hora_distribuicao.Split(":")[0]), Int32.Parse(grupo.Hora_distribuicao.Split(":")[1]), 0);
-                }
+                return NotFound(); //versao nao existe
+            }
+
+            DateTime dateTimeNow = DateTime.Now;
+            DateTime horaDataDistribuicao;
+
+            if (hora == null || hora == "")
+            {
+                horaDataDistribuicao = new DateTime(dateTimeNow.Year, dateTimeNow.Month, dateTimeNow.Day, Int32.Parse(grupo.Hora_distribuicao.Split(":")[0]), Int32.Parse(grupo.Hora_distribuicao.Split(":")[1]), 0);
+
+                if (dateTimeNow.Hour > Int32.Parse(grupo.Hora_distribuicao.Split(":")[0]) || (dateTimeNow.Hour == Int32.Parse(grupo.Hora_distribuicao.Split(":")[0]) && dateTimeNow.Minute >= Int32.Parse(grupo.Hora_distribuicao.Split(":")[1])))
+                    horaDataDistribuicao = new DateTime(dateTimeNow.Year, dateTimeNow.Month, dateTimeNow.Day + 1, Int32.Parse(grupo.Hora_distribuicao.Split(":")[0]), Int32.Parse(grupo.Hora_distribuicao.Split(":")[1]), 0);
             }
             else
             {
-                if (dateTime.Hour < Int32.Parse(hora.Split(":")[0]) || (dateTime.Hour == Int32.Parse(hora.Split(":")[0]) && dateTime.Minute < Int32.Parse(hora.Split(":")[1])))
-                {
-                    dateTime = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, Int32.Parse(hora.Split(":")[0]), Int32.Parse(hora.Split(":")[1]), 0);
-                }
-                else
-                {
-                    dateTime = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day + 1, Int32.Parse(hora.Split(":")[0]), Int32.Parse(hora.Split(":")[1]), 0);
-                }
+                horaDataDistribuicao = new DateTime(dateTimeNow.Year, dateTimeNow.Month, dateTimeNow.Day, Int32.Parse(hora.Split(":")[0]), Int32.Parse(hora.Split(":")[1]), 0);
+
+                if (dateTimeNow.Hour > Int32.Parse(hora.Split(":")[0]) || (dateTimeNow.Hour == Int32.Parse(hora.Split(":")[0]) && dateTimeNow.Minute >= Int32.Parse(hora.Split(":")[1])))
+                    horaDataDistribuicao = new DateTime(dateTimeNow.Year, dateTimeNow.Month, dateTimeNow.Day + 1, Int32.Parse(hora.Split(":")[0]), Int32.Parse(hora.Split(":")[1]), 0);
             }
 
-            VersaoCliente versaoCliente = new VersaoCliente { Cliente_ID = versaoClienteIDS.Cliente_ID, Versao_ID = versaoClienteIDS.Versao_ID, Data_distribuicao = dateTime };
+            versaoCliente.Data_distribuicao = horaDataDistribuicao;
 
-            _context.VersoesClientes.Add(versaoCliente);
-            try
+            if (VersaoClienteExists(versaoCliente.Cliente_ID.ToString(), versaoCliente.Versao_ID))
             {
-                await _context.SaveChangesAsync();
+                PutVersaoCliente(versaoCliente.Cliente_ID.ToString(), versaoCliente.Versao_ID, versaoCliente);
+                return Ok("Ok. VersaoCliente atualizada.");
             }
-            catch (DbUpdateException)
-            {
-                _context.Entry(versaoCliente).State = EntityState.Modified;
-                try
-                {
-                    await _context.SaveChangesAsync();
-                }
-                catch (Exception)
-                {
-                    if (VersaoClienteExists(versaoCliente.Versao_ID, versaoCliente.Cliente_ID))
-                    {
-                        return Conflict();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-            }
-            return CreatedAtAction("GetVersaoCliente", new { id_v = versaoCliente.Versao_ID, id_c = versaoCliente.Cliente_ID }, versaoCliente);
+
+            connection.Query("INSERT INTO VersoesClientes(Cliente_ID, Versao_ID, Data_distribuicao) VALUES(@Cliente_ID, @Versao_ID, @Data_distribuicao)",
+                    new { versaoCliente.Cliente_ID, versaoCliente.Versao_ID, versaoCliente.Data_distribuicao });
+
+            return Ok("Ok. VersaoCliente inserida.");
         }
 
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="id_v"></param>
         /// <param name="id_c"></param>
+        /// <param name="id_v"></param>
         /// <returns></returns>
-        [HttpDelete]
-        [Route("DeleteVersaoCliente")]
-        public async Task<ActionResult<VersaoCliente>> DeleteVersaoCliente(string id_v, string id_c)
+        [HttpDelete, Route("DeleteVersaoCliente")]
+        public ActionResult<VersaoCliente> DeleteVersaoCliente(string id_c, string id_v)
         {
-            var versaoCliente = await _context.VersoesClientes.FindAsync(id_v, id_c);
-            if (versaoCliente == null)
+            if (!VersaoClienteExists(id_c, id_v))
             {
                 return NotFound();
             }
 
-            _context.VersoesClientes.Remove(versaoCliente);
-            await _context.SaveChangesAsync();
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
 
-            return versaoCliente;
+            try
+            {
+                connection.Query("DELETE FROM VersoesClientes WHERE Cliente_ID LIKE @Cliente_ID AND Versao_ID LIKE @Versao_ID", new { Cliente_ID = id_c, Versao_ID = id_v });
+                return Ok("ok");
+            }
+            catch (Exception)
+            {
+                return Conflict("Conflito de valores. Delete da versaoCliente falhou.");
+            }
         }
 
-        private bool VersaoClienteExists(string id_v, string id_c)
+        private bool VersaoClienteExists(string id_c, string id_v)
         {
-            return _context.VersoesClientes.Any(vc => vc.Versao_ID == id_v && vc.Cliente_ID == id_c);
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
+
+            try
+            {
+                var item = connection.Query("SELECT Cliente_ID, Versao_ID FROM VersoesClientes WHERE Cliente_ID LIKE @Cliente_ID AND Versao_ID LIKE @Versao_ID", new { Cliente_ID = id_c, Versao_ID = id_v }).FirstOrDefault();
+                return item != null;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private bool VersaoExists(string id_v)
+        {
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
+
+            try
+            {
+                var item = connection.Query("SELECT Cliente_ID, Versao_ID FROM VersoesClientes WHERE Versao_ID LIKE @Versao_ID", new { Versao_ID = id_v }).FirstOrDefault();
+                return item != null;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private bool ClienteExists(string id_c)
+        {
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
+
+            try
+            {
+                var item = connection.Query("SELECT Cliente_ID, Versao_ID FROM VersoesClientes WHERE Cliente_ID LIKE @Cliente_ID", new { Cliente_ID = id_c }).FirstOrDefault();
+                return item != null;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
     }
 }

@@ -7,6 +7,5 @@ namespace OlifelVersionUpdateAPI.Models
         public string Lic_Id { get; set; }
 
         public byte[] FileBin { get; set; }
-
     }
 }

@@ -8,7 +8,7 @@ namespace OlifelVersionUpdateAPI.Models
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public Guid? Id { get; set; }
+        public Guid Id { get; set; }
         public string Nome { get; set; }
         public int Grupo { get; set; }
         public string Versao_atual { get; set; }

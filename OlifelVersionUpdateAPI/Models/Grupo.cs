@@ -9,11 +9,7 @@ namespace OlifelVersionUpdateAPI.Models
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int Id { get; set; }
-        [Required]
         public string Nome { get; set; }
-        [Required]
         public string Hora_distribuicao { get; set; }
-        public DateTime? Data_criacao { get; set; }
-        public DateTime? Data_ultima_alteracao { get; set; }
     }
 }

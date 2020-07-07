@@ -7,6 +7,7 @@ namespace OlifelVersionUpdateAPI.Models
     {
         public static void Initialize(ProjectContext context)
         {
+            /*
             context.Database.EnsureCreated();
 
             if (context.Utilizadores.Any())
@@ -14,10 +15,11 @@ namespace OlifelVersionUpdateAPI.Models
                 return; // DB has been seeded
             }
 
-            //preenche a base de dados
-            Utilizador utilizador = new Utilizador { Nome = "Admin", Email = "olifel2020@hotmail.com", Password = "12345678", Admin = true, Data_criacao = DateTime.Now, Data_ultima_alteracao = DateTime.Now };
+            preenche a base de dados
+            Utilizador utilizador = new Utilizador { Nome = "Admin", Email = "olifel2020@hotmail.com", Password = "12345678", Admin = true };
             context.Utilizadores.Add(utilizador);
             context.SaveChanges();
+            */
         }
     }
 }

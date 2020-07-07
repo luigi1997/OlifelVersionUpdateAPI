@@ -8,16 +8,10 @@ namespace OlifelVersionUpdateAPI.Models
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public string Id { get; set; }
-        [Required]
-        public string Nome { get; set; }
-        [Required]
-        public string Email { get; set; }
-        [Required]
-        public string Password { get; set; }
-        [Required]
-        public bool Admin { get; set; }
-        public DateTime? Data_criacao { get; set; }
-        public DateTime? Data_ultima_alteracao { get; set; }
+        public string UserID { get; set; }
+        public string UserName { get; set; }
+        public string UserMail { get; set; }
+        public string UserPwd { get; set; }
+        public bool IsAdmin { get; set; }
     }
 }

@@ -1,10 +1,12 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+﻿using Dapper;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using OlifelVersionUpdateAPI.Helpers;
 using OlifelVersionUpdateAPI.Models;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace OlifelVersionUpdateAPI.Controllers
 {
@@ -12,45 +14,43 @@ namespace OlifelVersionUpdateAPI.Controllers
     [ApiController]
     public class UtilizadoresController : ControllerBase
     {
-        private readonly ProjectContext _context;
+        private readonly DapperConnections _dapperConnections;
 
-        public UtilizadoresController(ProjectContext context)
+        public UtilizadoresController(IOptions<ConnectionsStrings> connectionConfig)
         {
-            _context = context;
-        }
-
-        public class UserData
-        {
-            public string Email { get; set; }
-            public string Password { get; set; }
+            _dapperConnections = new DapperConnections(connectionConfig);
         }
 
         /// <summary>
         /// 
         /// </summary>
         /// <returns></returns>
-        [HttpGet]
-        [Route("GetUtilizadores")]
-        public async Task<ActionResult<IEnumerable<Utilizador>>> GetUtilizadores()
+        [HttpGet, Route("GetUtilizadores")]
+        public ActionResult<IEnumerable<Utilizador>> GetUtilizadores()
         {
-            return await _context.Utilizadores.ToListAsync();
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
+
+            List<Utilizador> result = connection.Query<Utilizador>("SELECT * FROM Utilizadores").ToList();
+
+            return result;
         }
 
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="id"></param>
+        /// <param name="userID"></param>
         /// <returns></returns>
-        [HttpGet]
-        [Route("GetUtilizador")]
-        public async Task<ActionResult<Utilizador>> GetUtilizador(string id)
+        [HttpGet, Route("GetUtilizador")]
+        public ActionResult<Utilizador> GetUtilizador(string userID)
         {
-            var utilizador = await _context.Utilizadores.FindAsync(id);
-
-            if (utilizador == null)
+            if (!UtilizadorExistsID(userID))
             {
                 return NotFound();
             }
+
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
+
+            Utilizador utilizador = connection.Query<Utilizador>("SELECT * FROM Utilizadores WHERE UserID LIKE @UserID", new { UserID = userID }).FirstOrDefault();
 
             return utilizador;
         }
@@ -58,65 +58,59 @@ namespace OlifelVersionUpdateAPI.Controllers
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="utilizador"></param>
+        /// <param name="email"></param>
+        /// <param name="password"></param>
         /// <returns></returns>
-        [HttpPost]
-        [Route("CheckUtilizador")]
-        public ActionResult<Utilizador> CheckUtilizador(UserData utilizador)
+        [HttpGet, Route("CheckUtilizador")]
+        public ActionResult<Utilizador> CheckUtilizador(string email, string password)
         {
-            List<Utilizador> utilizadores = _context.Utilizadores.Where(u => u.Email == utilizador.Email && u.Password == utilizador.Password).ToList();
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
 
-            if (utilizadores.Count == 0)
-            {
+            Utilizador user = connection.Query<Utilizador>("SELECT * FROM Utilizadores WHERE UserMail = @UserMail AND UserPwd = @UserPwd", new { UserMail = email, UserPwd = password }).FirstOrDefault();
+
+            if (user != null)
+                return Ok(user.IsAdmin.ToString());
+            else
                 return NotFound();
-            }
-
-            return Ok(utilizadores[0].Admin.ToString());
         }
 
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="id"></param>
+        /// <param name="UserID"></param>
         /// <param name="utilizador"></param>
         /// <returns></returns>
-        [HttpPut]
-        [Route("PutUtilizador")]
-        public async Task<IActionResult> PutUtilizador(string id, Utilizador utilizador)
+        [HttpPut, Route("PutUtilizador")]
+        public IActionResult PutUtilizador(string UserID, Utilizador utilizador)
         {
-            if (id != utilizador.Id)
+            if (UserID != utilizador.UserID)
             {
                 return BadRequest();
             }
 
-            List<Utilizador> utilizadores = _context.Utilizadores.Where(u => u.Email == utilizador.Email).ToList();
-
-            if (utilizadores.Count > 0)
+            if (!UtilizadorExistsID(UserID))
             {
-                return BadRequest(); //email ja existe
+                return NotFound();
             }
 
-            utilizador.Data_ultima_alteracao = DateTime.Now;
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
 
-            _context.Entry(utilizador).State = EntityState.Modified;
+            //
+            Utilizador result = connection.Query<Utilizador>("SELECT * FROM Utilizadores WHERE UserID != @UserID AND UserMail = @UserMail", new { UserID, utilizador.UserMail }).FirstOrDefault();
 
+            if (result != null)
+                return Conflict("Conflito de valores. Email ja esta atribuido.");
+
+            //
             try
             {
-                await _context.SaveChangesAsync();
+                connection.Query("UPDATE Utilizadores SET UserName = @UserName, UserMail = @UserMail, UserPwd = @UserPwd, IsAdmin = @IsAdmin WHERE UserID LIKE @UserID", new { utilizador.UserName, utilizador.UserMail, utilizador.UserPwd, utilizador.IsAdmin, utilizador.UserID });
+                return Ok("Ok");
             }
-            catch (DbUpdateConcurrencyException)
+            catch (Exception)
             {
-                if (!UtilizadorExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
+                return Conflict("Conflito de valores. Update do utilizador falhou.");
             }
-
-            return NoContent();
         }
 
         /// <summary>
@@ -124,64 +118,88 @@ namespace OlifelVersionUpdateAPI.Controllers
         /// </summary>
         /// <param name="utilizador"></param>
         /// <returns></returns>
-        [HttpPost]
-        [Route("PostUtilizador")]
-        public async Task<ActionResult<Utilizador>> PostUtilizador(Utilizador utilizador)
+        [HttpPost, Route("PostUtilizador")]
+        public ActionResult<Utilizador> PostUtilizador(Utilizador utilizador)
         {
-            utilizador.Data_criacao = DateTime.Now;
-            utilizador.Data_ultima_alteracao = DateTime.Now;
-
-            List<Utilizador> utilizadores = _context.Utilizadores.Where(u => u.Email == utilizador.Email).ToList();
-
-            if(utilizadores.Count > 0)
+            if (UtilizadorExistsID(utilizador.UserID))
             {
-                return BadRequest(); //email ja existe
+                return Conflict("Conflito de valores. UserID já existe");
             }
 
-            _context.Utilizadores.Add(utilizador);
-            await _context.SaveChangesAsync();
+            if (UtilizadorExistsEmail(utilizador.UserMail))
+            {
+                return Conflict("Conflito de valores. UserMail já existe");
+            }
 
-            return CreatedAtAction("GetUtilizador", new { id = utilizador.Id }, utilizador);
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
+            try
+            {
+                connection.Query("INSERT INTO Utilizadores(UserID, UserName, UserMail, UserPwd, IsAdmin) VALUES(@UserID, @UserName, @UserMail, @UserPwd, @IsAdmin)",
+                    new { utilizador.UserID, utilizador.UserName, utilizador.UserMail, utilizador.UserPwd, utilizador.IsAdmin });
+
+                return Ok("Ok");
+            }
+            catch (Exception)
+            {
+                return Conflict("Conflito de valores. Insert do utilizador falhou.");
+            }
         }
 
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="id"></param>
+        /// <param name="UserID"></param>
         /// <returns></returns>
         [HttpDelete]
         [Route("DeleteUtilizador")]
-        public async Task<ActionResult<Utilizador>> DeleteUtilizador(string id)
+        public ActionResult<Utilizador> DeleteUtilizador(string UserID)
         {
-
-            List<Utilizador> admins = _context.Utilizadores.Where(u => u.Admin == true).ToList();
-
-            if(admins.Count >= 2)
-            {
-                //ok
-            } else
-            {
-                if(admins[0].Id == id)
-                {
-                    return BadRequest(); //nao pode apagar o ultimo admin
-                }
-            }
-
-            var utilizador = await _context.Utilizadores.FindAsync(id);
-            if (utilizador == null)
+            if (!UtilizadorExistsID(UserID))
             {
                 return NotFound();
             }
 
-            _context.Utilizadores.Remove(utilizador);
-            await _context.SaveChangesAsync();
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
 
-            return utilizador;
+            try
+            {
+                connection.Query("DELETE FROM Utilizadores WHERE UserID LIKE @UserID", new { UserID });
+                return Ok("Ok");
+            }
+            catch (Exception)
+            {
+                return Conflict("Conflito de valores. Delete do utilizador falhou.");
+            }
         }
 
-        private bool UtilizadorExists(string id)
+        private bool UtilizadorExistsID(string id)
         {
-            return _context.Utilizadores.Any(e => e.Id == id);
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
+
+            try
+            {
+                var item = connection.Query("SELECT ID FROM Utilizadores WHERE UserID LIKE @UserID", new { UserID = id }).FirstOrDefault();
+                return item != null;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private bool UtilizadorExistsEmail(string email)
+        {
+            using IDbConnection connection = _dapperConnections.getLicencasConnection();
+
+            try
+            {
+                var item = connection.Query("SELECT UserMail FROM Utilizadores WHERE UserMail LIKE @UserMail", new { UserMail = email }).FirstOrDefault();
+                return item != null;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
     }
 }
