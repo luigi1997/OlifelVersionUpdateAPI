@@ -1,0 +1,64 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>VgNetDapperDataExtended</name>
+    </assembly>
+    <members>
+        <member name="M:VgNetDapperDataExtended.DocCab.getLines(System.Data.IDbConnection,System.Data.IDbTransaction)">
+            <summary>
+            Retorna Lista de linhas de compoem o documento
+            </summary>
+            <param name="connection"></param>
+            <returns></returns>
+        </member>
+        <member name="M:VgNetDapperDataExtended.DocCab.getDocEgars(System.Data.IDbConnection,System.Data.IDbTransaction)">
+            <summary>
+            
+            </summary>
+            <param name="connection"></param>
+            <returns></returns>
+        </member>
+        <member name="M:VgNetDapperDataExtended.DocCab.findByKey(System.String,System.Int32,System.Int32,System.Int32,System.Data.IDbConnection,System.Data.IDbTransaction)">
+            <summary>
+            Retorna TODOS os campos de DocCab
+            </summary>
+            <param name="tipoDoc"></param>
+            <param name="ano"></param>
+            <param name="mes"></param>
+            <param name="numdoc"></param>
+            <param name="connection"></param>
+            <returns></returns>
+        </member>
+        <member name="M:VgNetDapperDataExtended.DocCab.findByKeyLight(System.String,System.Int32,System.Int32,System.Int32,System.Data.IDbConnection,System.Data.IDbTransaction)">
+             <summary>
+             Metodo que vai buscar Doccab Apenas mas sem os seguintes campos
+            [QrCode]
+            [NomeCargaTracker]
+            [NomeDescargaTracker]
+            [DataHoraTracker]
+            [AssinaturaTracker]
+             </summary>
+             <param name="tipoDoc"></param>
+             <param name="ano"></param>
+             <param name="mes"></param>
+             <param name="numdoc"></param>
+             <param name="connection"></param>
+             <returns></returns>
+        </member>
+        <member name="M:VgNetDapperDataExtended.DocCab.getKeyAsString">
+            <summary>
+            This method can change at any time
+            Please use only to demo or log pupose
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:VgNetDapperDataExtended.DocCab.AssinaDoc(System.Data.IDbConnection,System.Int32)">
+            <summary>
+            Assina o documento
+            </summary>
+            <param name="connection"></param>
+            <param name="encodingPageNumber">por defeiro: "Windows-1252"</param>
+            <returns></returns>
+        </member>
+    </members>
+</doc>

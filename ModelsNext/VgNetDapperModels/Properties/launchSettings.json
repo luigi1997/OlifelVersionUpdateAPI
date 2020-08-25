@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "VgNetDapperModels": {
+      "commandName": "Project",
+      "nativeDebugging": false
+    }
+  }
+}

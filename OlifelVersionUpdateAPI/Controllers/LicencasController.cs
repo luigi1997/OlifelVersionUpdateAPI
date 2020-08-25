@@ -123,7 +123,7 @@ namespace OlifelVersionUpdateAPI.Controllers
             {
                 try
                 {
-                    List<Licenca> listaLicencas = connection.Query<Licenca>(@"select l.Lic_Id,l.FileBin FROM Licencas l
+                    List<Licenca> listaLicencas = connection.Query<Licenca>(@"select l.Lic_Id, l.FileBin FROM Licencas l
                                                                             INNER JOIN Terceiros t on l.ID = t.ID
                                                                             WHERE t.ID = @ID AND l.isNew = 1
                                                                             order by l.dtupdate desc ", new { ID = guid }).ToList();
@@ -160,7 +160,6 @@ namespace OlifelVersionUpdateAPI.Controllers
                     }
 
                     return Ok(result);
-
                 }
                 catch (Exception ex)
                 {
