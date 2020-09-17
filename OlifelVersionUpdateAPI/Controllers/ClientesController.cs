@@ -264,6 +264,7 @@ namespace OlifelVersionUpdateAPI.Controllers
                 var item = connection.Query("SELECT ID FROM Terceiros WHERE Id LIKE @ID", new { ID = id }).FirstOrDefault();
                 return item != null;
             }
+            }
             catch (Exception)
             {
                 return false;
